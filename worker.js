@@ -960,11 +960,15 @@ export default {
             const d    = await r.json();
             const meta = d && d.chart && d.chart.result && d.chart.result[0] && d.chart.result[0].meta;
             if (!meta) return null;
+            // Pick the most current available price across all sessions
+            let price = meta.regularMarketPrice;
+            if (meta.marketState === "PRE"  && meta.preMarketPrice  > 0) price = meta.preMarketPrice;
+            if (meta.marketState === "POST" && meta.postMarketPrice > 0) price = meta.postMarketPrice;
+            if (price == null) price = meta.chartPreviousClose;
+
             return {
               symbol:             meta.symbol || sym,
-              regularMarketPrice: meta.regularMarketPrice != null
-                                    ? meta.regularMarketPrice
-                                    : meta.chartPreviousClose,
+              regularMarketPrice: price,
             };
           } catch (_) {
             return null;

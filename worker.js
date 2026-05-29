@@ -153,7 +153,7 @@ const HTML = `<!DOCTYPE html>
       display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       overflow: hidden;
       max-width: 1200px;
       opacity: 1;

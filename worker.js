@@ -129,6 +129,31 @@ const HTML = `<!DOCTYPE html>
     .badge-green { background: #1a3a1a; color: #3fb950; border: 1px solid #238636; }
     .badge-blue  { background: #0d2a4a; color: #79c0ff; border: 1px solid #1f6feb; }
 
+    /* ── Chart-controls collapse ────────────────────────────── */
+    .ctrl-toggle {
+      padding: 3px 8px;
+      font-size: 0.75rem;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+      cursor: pointer;
+      background: transparent;
+      color: #8b949e;
+      flex-shrink: 0;
+      transition: background 0.15s, color 0.15s;
+      line-height: 1;
+    }
+    .ctrl-toggle:hover { background: #21262d; color: #e6edf3; }
+    body.theme-light .ctrl-toggle       { border-color: #d0d7de; color: #57606a; }
+    body.theme-light .ctrl-toggle:hover { background: #f3f4f6; color: #24292f; }
+
+    #chartControls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #chartControls.hidden { display: none; }
+
     /* ── Portfolio toolbar elements ─────────────────────────── */
     .portfolio-btn {
       padding: 5px 12px;
@@ -423,30 +448,34 @@ const HTML = `<!DOCTYPE html>
 
 <header>
   <div class="global-controls">
-    <span class="control-label">Interval:</span>
-    <div class="interval-group" id="intervalGroup">
-      <button class="interval-btn" data-val="1">1m</button>
-      <button class="interval-btn" data-val="5">5m</button>
-      <button class="interval-btn" data-val="15">15m</button>
-      <button class="interval-btn" data-val="30">30m</button>
-      <button class="interval-btn" data-val="60">1h</button>
-      <button class="interval-btn active" data-val="D">1D</button>
-      <button class="interval-btn" data-val="W">1W</button>
+    <button class="ctrl-toggle" id="ctrlToggle" title="Show / hide chart controls">&#9664;</button>
+
+    <div id="chartControls">
+      <span class="control-label">Interval:</span>
+      <div class="interval-group" id="intervalGroup">
+        <button class="interval-btn" data-val="1">1m</button>
+        <button class="interval-btn" data-val="5">5m</button>
+        <button class="interval-btn" data-val="15">15m</button>
+        <button class="interval-btn" data-val="30">30m</button>
+        <button class="interval-btn" data-val="60">1h</button>
+        <button class="interval-btn active" data-val="D">1D</button>
+        <button class="interval-btn" data-val="W">1W</button>
+      </div>
+
+      <span class="control-label">Theme:</span>
+      <div class="theme-group">
+        <button class="theme-btn active" data-theme="dark">Dark</button>
+        <button class="theme-btn" data-theme="light">Light</button>
+      </div>
+
+      <button class="apply-btn" id="applyAll">Apply to All</button>
+
+      <span class="control-label">Show:</span>
+      <button class="toggle-btn active" id="toggleInputs">Inputs</button>
+
+      <span class="badge badge-green">&#10003; Pre-market &amp; After-hours</span>
+      <span class="badge badge-blue" id="layoutBadge">&#8212;</span>
     </div>
-
-    <span class="control-label">Theme:</span>
-    <div class="theme-group">
-      <button class="theme-btn active" data-theme="dark">Dark</button>
-      <button class="theme-btn" data-theme="light">Light</button>
-    </div>
-
-    <button class="apply-btn" id="applyAll">Apply to All</button>
-
-    <span class="control-label">Show:</span>
-    <button class="toggle-btn active" id="toggleInputs">Inputs</button>
-
-    <span class="badge badge-green">&#10003; Pre-market &amp; After-hours</span>
-    <span class="badge badge-blue" id="layoutBadge">&#8212;</span>
 
     <button class="portfolio-btn" id="portfolioBtn">Edit Portfolio</button>
     <span class="portfolio-total" id="portfolioTotal"></span>
@@ -507,9 +536,10 @@ const HTML = `<!DOCTYPE html>
   var DEFAULT_TICKERS = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "TSLA", "META", "JPM"];
   var saved           = loadSettings();
   var initialTickers  = DEFAULT_TICKERS.map(function(d, i) { return saved.tickers ? (saved.tickers[i] || d) : d; });
-  var currentInterval = saved.interval || "D";
-  var currentTheme    = saved.theme    || "dark";
-  var showInputs      = saved.showInputs !== false;
+  var currentInterval  = saved.interval       || "D";
+  var currentTheme     = saved.theme          || "dark";
+  var showInputs       = saved.showInputs     !== false;
+  var ctrlsCollapsed   = saved.ctrlsCollapsed === true;
 
   var loaded = [];
 
@@ -660,6 +690,17 @@ const HTML = `<!DOCTYPE html>
 
   /* ── Apply to All ─────────────────────────────────────────── */
   document.getElementById("applyAll").addEventListener("click", reloadVisible);
+
+  /* ── Chart-controls collapse ──────────────────────────────── */
+  function applyCtrlsState() {
+    document.getElementById("chartControls").classList.toggle("hidden", ctrlsCollapsed);
+    document.getElementById("ctrlToggle").textContent = ctrlsCollapsed ? "►" : "◄";
+  }
+  document.getElementById("ctrlToggle").addEventListener("click", function() {
+    ctrlsCollapsed = !ctrlsCollapsed;
+    saveSettings({ ctrlsCollapsed: ctrlsCollapsed });
+    applyCtrlsState();
+  });
 
   /* ── Input visibility toggle ──────────────────────────────── */
   function applyVisibility() {
@@ -926,6 +967,7 @@ const HTML = `<!DOCTYPE html>
   });
   if (currentTheme === "light") document.body.classList.add("theme-light");
 
+  applyCtrlsState();
   applyVisibility();
   applyLayout();
   startPricePolling();

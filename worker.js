@@ -154,12 +154,24 @@ const HTML = `<!DOCTYPE html>
     }
     .portfolio-total:empty { display: none; }
 
+    .portfolio-change {
+      font-size: 0.82rem;
+      font-weight: 600;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .portfolio-change.up   { color: #3fb950; }
+    .portfolio-change.down { color: #f85149; }
+    .portfolio-change:empty { display: none; }
+
     .portfolio-updated {
       font-size: 0.68rem;
       color: #484f58;
       white-space: nowrap;
     }
     .portfolio-updated:empty { display: none; }
+    body.theme-light .portfolio-change.up   { color: #1a7f37; }
+    body.theme-light .portfolio-change.down { color: #cf222e; }
     body.theme-light .portfolio-updated { color: #8c959f; }
 
     /* ── Grid ───────────────────────────────────────────────── */
@@ -436,6 +448,7 @@ const HTML = `<!DOCTYPE html>
 
     <button class="portfolio-btn" id="portfolioBtn">Edit Portfolio</button>
     <span class="portfolio-total" id="portfolioTotal"></span>
+    <span class="portfolio-change" id="portfolioChange"></span>
     <span class="portfolio-updated" id="portfolioUpdated"></span>
   </div>
 </header>
@@ -657,24 +670,26 @@ const HTML = `<!DOCTYPE html>
   });
 
   /* ── Portfolio ────────────────────────────────────────────── */
-  var portfolio      = saved.portfolio || [];   /* [{ticker:'AAPL', qty:10}, ...] */
-  var modalPortfolio = [];
-  var portfolioPrices = {};
-  var portfolioTimer  = null;
+  var portfolio          = saved.portfolio || [];   /* [{ticker:'AAPL', qty:10}, ...] */
+  var modalPortfolio     = [];
+  var portfolioPrices    = {};   /* {AAPL: currentPrice} */
+  var portfolioOpenPrices = {};  /* {AAPL: openPrice}    */
+  var portfolioTimer     = null;
 
   async function fetchPrices(symbols) {
     var nonCash = symbols.filter(function(s) { return s !== "CASH"; });
-    if (nonCash.length === 0) return {};
+    if (nonCash.length === 0) return { prices: {}, opens: {} };
     try {
       var resp = await fetch("/api/quote?symbols=" + nonCash.join(","), { cache: "no-store" });
       var data = await resp.json();
-      var result = {};
+      var prices = {}, opens = {};
       ((data.quoteResponse && data.quoteResponse.result) || []).forEach(function(q) {
-        result[q.symbol] = q.regularMarketPrice;
+        prices[q.symbol] = q.regularMarketPrice;
+        opens[q.symbol]  = q.regularMarketOpen != null ? q.regularMarketOpen : q.regularMarketPrice;
       });
-      return result;
+      return { prices: prices, opens: opens };
     } catch(e) {
-      return {};
+      return { prices: {}, opens: {} };
     }
   }
 
@@ -697,10 +712,34 @@ const HTML = `<!DOCTYPE html>
   }
 
   function renderToolbarTotal() {
-    var el = document.getElementById("portfolioTotal");
-    var ts = document.getElementById("portfolioUpdated");
-    if (portfolio.length === 0) { el.textContent = ""; ts.textContent = ""; return; }
-    el.textContent = fmtMoney(calcTotal(portfolio, portfolioPrices));
+    var el  = document.getElementById("portfolioTotal");
+    var chg = document.getElementById("portfolioChange");
+    var ts  = document.getElementById("portfolioUpdated");
+    if (portfolio.length === 0) {
+      el.textContent = ""; chg.textContent = ""; ts.textContent = ""; return;
+    }
+
+    var currentTotal = calcTotal(portfolio, portfolioPrices);
+    var openTotal    = calcTotal(portfolio, portfolioOpenPrices);
+    el.textContent   = fmtMoney(currentTotal);
+
+    /* show change only when every non-cash holding has an open price */
+    var allHaveOpen = portfolio.every(function(item) {
+      var t = (item.ticker || "").toUpperCase();
+      return t === "CASH" || portfolioOpenPrices[t] != null;
+    });
+
+    if (allHaveOpen && openTotal > 0) {
+      var change = currentTotal - openTotal;
+      var pct    = (change / openTotal) * 100;
+      var sign   = change >= 0 ? "+" : "-";
+      chg.textContent = sign + fmtMoney(Math.abs(change)) +
+                        " (" + sign + Math.abs(pct).toFixed(2) + "%)";
+      chg.className   = "portfolio-change " + (change >= 0 ? "up" : "down");
+    } else {
+      chg.textContent = "";
+    }
+
     var now = new Date();
     ts.textContent = "updated " + now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   }
@@ -758,8 +797,9 @@ const HTML = `<!DOCTYPE html>
     var symbols = portfolio
       .map(function(p) { return (p.ticker || "").toUpperCase(); })
       .filter(function(s, i, a) { return s && a.indexOf(s) === i && s !== "CASH"; });
-    var prices = await fetchPrices(symbols);
-    Object.assign(portfolioPrices, prices);
+    var result = await fetchPrices(symbols);
+    Object.assign(portfolioPrices,     result.prices);
+    Object.assign(portfolioOpenPrices, result.opens);
     renderToolbarTotal();
     if (!document.getElementById("portfolioModal").hidden) refreshModalPrices();
   }
@@ -781,8 +821,9 @@ const HTML = `<!DOCTYPE html>
       .map(function(p) { return (p.ticker || "").toUpperCase(); })
       .filter(function(s, i, a) { return s && a.indexOf(s) === i && s !== "CASH"; });
     if (symbols.length > 0) {
-      fetchPrices(symbols).then(function(prices) {
-        Object.assign(portfolioPrices, prices);
+      fetchPrices(symbols).then(function(result) {
+        Object.assign(portfolioPrices,     result.prices);
+        Object.assign(portfolioOpenPrices, result.opens);
         refreshModalPrices();
       });
     }
@@ -825,8 +866,9 @@ const HTML = `<!DOCTYPE html>
     if (!e.target.classList.contains("p-ticker-input")) return;
     var ticker = e.target.value.trim().toUpperCase();
     if (!ticker || ticker === "CASH") { refreshModalPrices(); return; }
-    fetchPrices([ticker]).then(function(prices) {
-      Object.assign(portfolioPrices, prices);
+    fetchPrices([ticker]).then(function(result) {
+      Object.assign(portfolioPrices,     result.prices);
+      Object.assign(portfolioOpenPrices, result.opens);
       refreshModalPrices();
     });
   }, true);
@@ -906,6 +948,9 @@ export default {
               regularMarketPrice: meta.regularMarketPrice != null
                                     ? meta.regularMarketPrice
                                     : meta.chartPreviousClose,
+              regularMarketOpen:  meta.regularMarketOpen  != null
+                                    ? meta.regularMarketOpen
+                                    : meta.regularMarketPrice,
             };
           } catch (_) {
             return null;

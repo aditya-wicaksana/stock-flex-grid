@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>U.S. Stock Chart Grid</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;          /* prevent outer scroll; charts scroll internally */
+    }
+
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+
+    .global-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+
+    .control-label {
+      font-size: 0.75rem;
+      color: #8b949e;
+      white-space: nowrap;
+    }
+
+    /* interval buttons */
+    .interval-group {
+      display: flex;
+      gap: 3px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 3px;
+    }
+
+    .interval-btn {
+      padding: 4px 9px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: transparent;
+      color: #8b949e;
+      transition: background 0.15s, color 0.15s;
+    }
+    .interval-btn:hover  { background: #21262d; color: #e6edf3; }
+    .interval-btn.active { background: #1f6feb; color: #fff; }
+
+    /* theme toggle */
+    .theme-group {
+      display: flex;
+      gap: 3px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 3px;
+    }
+
+    .theme-btn {
+      padding: 4px 9px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: transparent;
+      color: #8b949e;
+      transition: background 0.15s, color 0.15s;
+    }
+    .theme-btn:hover  { background: #21262d; color: #e6edf3; }
+    .theme-btn.active { background: #388bfd26; color: #58a6ff; border: 1px solid #1f6feb; }
+
+    /* apply-all button */
+    .apply-btn {
+      padding: 5px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid #1f6feb;
+      border-radius: 6px;
+      cursor: pointer;
+      background: transparent;
+      color: #58a6ff;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .apply-btn:hover { background: #1f6feb22; }
+
+    /* show/hide toggle buttons */
+    .toggle-btn {
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+      cursor: pointer;
+      background: transparent;
+      color: #8b949e;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .toggle-btn:hover           { background: #21262d; color: #e6edf3; }
+    .toggle-btn.active          { background: #1f6feb22; color: #58a6ff; border-color: #1f6feb; }
+
+    /* hide card inputs when toggled off */
+    main.hide-inputs .card-header { display: none; }
+
+    /* badges */
+    .badge {
+      font-size: 0.7rem;
+      border-radius: 12px;
+      padding: 3px 9px;
+      white-space: nowrap;
+    }
+    .badge-green {
+      background: #1a3a1a;
+      color: #3fb950;
+      border: 1px solid #238636;
+    }
+    .badge-blue {
+      background: #0d2a4a;
+      color: #79c0ff;
+      border: 1px solid #1f6feb;
+    }
+    /* ── Grid ────────────────────────────────────────────── */
+    main {
+      flex: 1;
+      display: grid;
+      gap: 8px;
+      padding: 8px;
+      min-height: 0;           /* allow flex child to shrink */
+      overflow: hidden;
+    }
+
+    /* Layout classes applied by JS */
+    main.layout-desktop          { grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(2,1fr); }
+    main.layout-tablet-landscape { grid-template-columns: repeat(3,1fr); grid-template-rows: repeat(2,1fr); }
+    main.layout-tablet-portrait  { grid-template-columns: repeat(2,1fr); grid-template-rows: repeat(3,1fr); }
+    main.layout-mobile-landscape { grid-template-columns: repeat(2,1fr); grid-template-rows: repeat(1,1fr); }
+    main.layout-mobile-portrait  { grid-template-columns: repeat(1,1fr); grid-template-rows: repeat(2,1fr); }
+
+    /* ── Chart card ──────────────────────────────────────── */
+    .chart-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 200px;
+      transition: border-color 0.15s;
+    }
+    .chart-card:hover          { border-color: #58a6ff55; }
+    .chart-card[hidden]        { display: none !important; }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 9px;
+      background: #0d1117;
+      border-bottom: 1px solid #21262d;
+      flex-shrink: 0;
+    }
+
+    .ticker-input {
+      flex: 1;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+      color: #e6edf3;
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 4px 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      transition: border-color 0.15s;
+    }
+    .ticker-input:focus {
+      outline: none;
+      border-color: #58a6ff;
+      background: #161b22;
+    }
+
+    .load-btn {
+      padding: 4px 11px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid #238636;
+      border-radius: 5px;
+      cursor: pointer;
+      background: transparent;
+      color: #3fb950;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .load-btn:hover { background: #23863622; }
+
+    .chart-wrap {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+    }
+
+    .chart-wrap .tv-container {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    /* ── Light theme overrides ───────────────────────────── */
+    body.theme-light { background: #f0f3fa; color: #24292f; }
+    body.theme-light header          { background: #f6f8fa; border-bottom-color: #d0d7de; }
+    body.theme-light .control-label  { color: #57606a; }
+
+    body.theme-light .interval-group { background: #ffffff; border-color: #d0d7de; }
+    body.theme-light .interval-btn   { color: #57606a; }
+    body.theme-light .interval-btn:hover { background: #f3f4f6; color: #24292f; }
+
+    body.theme-light .theme-group    { background: #ffffff; border-color: #d0d7de; }
+    body.theme-light .theme-btn      { color: #57606a; }
+    body.theme-light .theme-btn:hover { background: #f3f4f6; color: #24292f; }
+    body.theme-light .theme-btn.active { background: #ddf4ff; color: #0969da; border-color: #0969da; }
+
+    body.theme-light .apply-btn      { border-color: #0969da; color: #0969da; }
+    body.theme-light .apply-btn:hover { background: #0969da22; }
+
+    body.theme-light .toggle-btn     { border-color: #d0d7de; color: #57606a; }
+    body.theme-light .toggle-btn:hover { background: #f3f4f6; color: #24292f; }
+    body.theme-light .toggle-btn.active { background: #ddf4ff; color: #0969da; border-color: #0969da; }
+
+    body.theme-light .badge-green    { background: #dafbe1; color: #1a7f37; border-color: #1a7f37; }
+    body.theme-light .badge-blue     { background: #ddf4ff; color: #0969da; border-color: #0969da; }
+
+    body.theme-light .chart-card     { background: #ffffff; border-color: #d0d7de; }
+    body.theme-light .chart-card:hover { border-color: #0969da55; }
+
+    body.theme-light .card-header    { background: #f6f8fa; border-bottom-color: #d0d7de; }
+    body.theme-light .ticker-input   { background: #ffffff; border-color: #d0d7de; color: #24292f; }
+    body.theme-light .ticker-input:focus { border-color: #0969da; }
+    body.theme-light .load-btn       { border-color: #1a7f37; color: #1a7f37; }
+    body.theme-light .load-btn:hover { background: #1a7f3722; }
+
+    /* ── Toolbar collapse ────────────────────────────────── */
+    .toolbar-toggle {
+      padding: 3px 8px;
+      font-size: 0.75rem;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+      cursor: pointer;
+      background: transparent;
+      color: #8b949e;
+      flex-shrink: 0;
+      transition: background 0.15s, color 0.15s;
+      line-height: 1;
+    }
+    .toolbar-toggle:hover { background: #21262d; color: #e6edf3; }
+    body.theme-light .toolbar-toggle { border-color: #d0d7de; color: #57606a; }
+    body.theme-light .toolbar-toggle:hover { background: #f3f4f6; color: #24292f; }
+
+    header.collapsed { padding: 5px 16px; }
+    header.collapsed .global-controls { display: none; }
+
+  </style>
+</head>
+<body>
+<script src="https://s3.tradingview.com/tv.js"></script>
+
+<header>
+  <button class="toolbar-toggle" id="toolbarToggle" title="Collapse / expand toolbar">▲</button>
+<div class="global-controls">
+    <span class="control-label">Interval:</span>
+    <div class="interval-group" id="intervalGroup">
+      <button class="interval-btn" data-val="1">1m</button>
+      <button class="interval-btn" data-val="5">5m</button>
+      <button class="interval-btn" data-val="15">15m</button>
+      <button class="interval-btn" data-val="30">30m</button>
+      <button class="interval-btn" data-val="60">1h</button>
+      <button class="interval-btn active" data-val="D">1D</button>
+      <button class="interval-btn" data-val="W">1W</button>
+    </div>
+
+    <span class="control-label">Theme:</span>
+    <div class="theme-group">
+      <button class="theme-btn active" data-theme="dark">Dark</button>
+      <button class="theme-btn" data-theme="light">Light</button>
+    </div>
+
+    <button class="apply-btn" id="applyAll">Apply to All</button>
+
+    <span class="control-label">Show:</span>
+    <button class="toggle-btn active" id="toggleInputs" title="Show / hide ticker inputs">Inputs</button>
+
+    <span class="badge badge-green">✓ Pre-market &amp; After-hours</span>
+    <span class="badge badge-blue" id="layoutBadge">—</span>
+  </div>
+</header>
+
+<main id="grid"></main>
+
+<script>
+  /* ─────────────────────────────────────────────────────────
+     Configuration
+  ───────────────────────────────────────────────────────── */
+  /* localStorage helpers */
+  const STORAGE_KEY = "stockgrid_v1";
+  function loadSettings() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function saveSettings(patch) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...loadSettings(), ...patch })); }
+    catch { /* storage unavailable */ }
+  }
+
+  /* Restored from storage, else defaults */
+  const DEFAULT_TICKERS = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "TSLA", "META", "JPM"];
+  const saved             = loadSettings();
+  const initialTickers    = DEFAULT_TICKERS.map((d, i) => saved.tickers?.[i] || d);
+  let currentInterval  = saved.interval    || "D";
+  let currentTheme     = saved.theme       || "dark";
+  let showInputs        = saved.showInputs   !== false;   /* default: visible */
+  let toolbarCollapsed  = saved.toolbarCollapsed === true; /* default: expanded */
+
+  /* Track which card indices have been loaded at least once */
+  const loaded = new Set();
+
+  /* ─────────────────────────────────────────────────────────
+     Layout detection
+     Returns one of five layout descriptors based on viewport
+     width and orientation, matching:
+       Desktop          ≥ 1200 px wide         → 4×2  (8 charts)
+       Tablet Landscape 768–1199 px, landscape  → 3×2  (6 charts)
+       Tablet Portrait  768–1199 px, portrait   → 2×3  (6 charts)
+       Mobile Landscape < 768 px,  landscape    → 2×1  (2 charts)
+       Mobile Portrait  < 768 px,  portrait     → 1×2  (2 charts)
+  ───────────────────────────────────────────────────────── */
+  const LAYOUTS = {
+    desktop:         { cls: "layout-desktop",          visible: 8, label: "Desktop 4×2" },
+    tabletLandscape: { cls: "layout-tablet-landscape", visible: 6, label: "Tablet Landscape 3×2" },
+    tabletPortrait:  { cls: "layout-tablet-portrait",  visible: 6, label: "Tablet Portrait 2×3" },
+    mobileLandscape: { cls: "layout-mobile-landscape", visible: 2, label: "Mobile Landscape 2×1" },
+    mobilePortrait:  { cls: "layout-mobile-portrait",  visible: 2, label: "Mobile Portrait 1×2" },
+  };
+
+  function detectLayout() {
+    const w           = window.innerWidth;
+    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+
+    if (w >= 1200)                    return LAYOUTS.desktop;
+    if (w >= 768  &&  isLandscape)    return LAYOUTS.tabletLandscape;
+    if (w >= 768  && !isLandscape)    return LAYOUTS.tabletPortrait;
+    if (              isLandscape)    return LAYOUTS.mobileLandscape;
+    return LAYOUTS.mobilePortrait;
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     Build the 8-card grid
+  ───────────────────────────────────────────────────────── */
+  const grid   = document.getElementById("grid");
+  const cards  = [];
+
+  initialTickers.forEach((ticker, i) => {
+    const card = document.createElement("div");
+    card.className  = "chart-card";
+    card.dataset.idx = i;
+    card.innerHTML  = `
+      <div class="card-header">
+        <input class="ticker-input" id="ticker-${i}" value="${ticker}"
+               placeholder="e.g. AAPL" maxlength="12"
+               title="Type a ticker and press Enter or click Load" />
+        <button class="load-btn" data-idx="${i}">Load</button>
+      </div>
+      <div class="chart-wrap" id="wrap-${i}"></div>
+    `;
+    grid.appendChild(card);
+    cards.push(card);
+
+    card.querySelector(".ticker-input").addEventListener("keydown", e => {
+      if (e.key === "Enter") loadChart(i);
+    });
+    card.querySelector(".load-btn").addEventListener("click", () => loadChart(i));
+  });
+
+  /* ─────────────────────────────────────────────────────────
+     Apply layout: set grid class, show/hide cards,
+     load any newly revealed cards
+  ───────────────────────────────────────────────────────── */
+  let activeLayout = null;
+
+  function applyLayout() {
+    const layout = detectLayout();
+    if (layout === activeLayout) return;   /* no change */
+    activeLayout = layout;
+
+    /* swap grid class */
+    Object.values(LAYOUTS).forEach(l => grid.classList.remove(l.cls));
+    grid.classList.add(layout.cls);
+
+    /* show/hide cards */
+    cards.forEach((card, i) => {
+      const visible = i < layout.visible;
+      card.hidden = !visible;
+
+      /* load chart if it becomes visible for the first time */
+      if (visible && !loaded.has(i)) loadChart(i);
+    });
+
+    /* update badge */
+    document.getElementById("layoutBadge").textContent = layout.label;
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     TradingView widget loader
+  ───────────────────────────────────────────────────────── */
+  function tvSymbol(raw) {
+    const t = raw.trim().toUpperCase();
+    return t;   /* pass through; TradingView resolves exchange automatically */
+  }
+
+  function loadChart(idx, symbol, interval, theme) {
+    symbol   = symbol   ?? document.getElementById(`ticker-${idx}`).value;
+    interval = interval ?? currentInterval;
+    theme    = theme    ?? currentTheme;
+    symbol   = tvSymbol(symbol);
+    if (!symbol) return;
+
+    loaded.add(idx);
+
+    /* persist the ticker for this slot */
+    const allTickers = cards.map((_, j) => document.getElementById(`ticker-${j}`).value);
+    saveSettings({ tickers: allTickers });
+
+    const wrap = document.getElementById(`wrap-${idx}`);
+    wrap.innerHTML = "";   /* clear previous widget */
+
+    const containerId = `tv_${idx}_${Date.now()}`;
+    const div = document.createElement("div");
+    div.id        = containerId;
+    div.className = "tv-container";
+    wrap.appendChild(div);
+
+    /* tv.js is loaded once in <head>; call widget directly */
+    new TradingView.widget({          /* eslint-disable-line no-new */
+      autosize:            true,
+      symbol:              symbol,
+      interval:            interval,
+      timezone:            "America/New_York",
+      theme:               theme,
+      style:               "1",       /* candlestick */
+      locale:              "en",
+      toolbar_bg:          theme === "dark" ? "#161b22" : "#f0f3fa",
+      enable_publishing:   false,
+      hide_top_toolbar:    false,
+      hide_legend:         false,
+      save_image:          false,
+      allow_symbol_change: false,
+      extended_hours:      true,      /* pre-market & after-hours */
+      container_id:        containerId,
+    });
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     Reload all currently visible charts
+     (used by Apply All and orientation-change handler)
+  ───────────────────────────────────────────────────────── */
+  function reloadVisible() {
+    cards.forEach((card, i) => {
+      if (!card.hidden) loadChart(i);
+    });
+  }
+
+  /* ─────────────────────────────────────────────────────────
+     Orientation / resize handler
+     Debounced to avoid thrashing during resize drag.
+     On orientation change, reload visible charts so widgets
+     fit the new dimensions correctly.
+  ───────────────────────────────────────────────────────── */
+  let resizeTimer   = null;
+  let prevLayoutCls = null;
+
+  function onViewportChange() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const before = activeLayout;
+      applyLayout();
+      /* if the grid shape changed, reload visible charts for correct sizing */
+      if (activeLayout !== before) reloadVisible();
+    }, 150);
+  }
+
+  window.addEventListener("resize",            onViewportChange);
+  window.addEventListener("orientationchange", onViewportChange);
+
+  /* ─────────────────────────────────────────────────────────
+     Interval buttons
+  ───────────────────────────────────────────────────────── */
+  document.getElementById("intervalGroup").addEventListener("click", e => {
+    const btn = e.target.closest(".interval-btn");
+    if (!btn) return;
+    document.querySelectorAll("#intervalGroup .interval-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentInterval = btn.dataset.val;
+    saveSettings({ interval: currentInterval });
+  });
+
+  /* ─────────────────────────────────────────────────────────
+     Theme buttons
+  ───────────────────────────────────────────────────────── */
+  document.querySelectorAll(".theme-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".theme-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentTheme = btn.dataset.theme;
+      saveSettings({ theme: currentTheme });
+      document.body.classList.toggle("theme-light", currentTheme === "light");
+    });
+  });
+
+  /* ─────────────────────────────────────────────────────────
+     Apply to All
+  ───────────────────────────────────────────────────────── */
+  document.getElementById("applyAll").addEventListener("click", reloadVisible);
+
+  /* ── Toolbar collapse ───────────────────────────────── */
+  function applyToolbarState() {
+    const hdr = document.querySelector("header");
+    hdr.classList.toggle("collapsed", toolbarCollapsed);
+    document.getElementById("toolbarToggle").textContent = toolbarCollapsed ? "▼" : "▲";
+  }
+
+  document.getElementById("toolbarToggle").addEventListener("click", () => {
+    toolbarCollapsed = !toolbarCollapsed;
+    saveSettings({ toolbarCollapsed });
+    applyToolbarState();
+  });
+
+  /* ── Visibility toggles ──────────────────────────────── */
+  function applyVisibility() {
+    grid.classList.toggle("hide-inputs", !showInputs);
+    document.getElementById("toggleInputs").classList.toggle("active", showInputs);
+  }
+
+  document.getElementById("toggleInputs").addEventListener("click", () => {
+    showInputs = !showInputs;
+    saveSettings({ showInputs });
+    applyVisibility();
+  });
+
+  /* ─────────────────────────────────────────────────────────
+     Boot
+  ───────────────────────────────────────────────────────── */
+  /* Restore saved chart-interval button */
+  document.querySelectorAll("#intervalGroup .interval-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.val === currentInterval);
+  });
+
+  applyToolbarState();
+  applyVisibility();
+
+  /* Restore saved theme */
+  document.querySelectorAll(".theme-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.theme === currentTheme);
+  });
+  if (currentTheme === "light") document.body.classList.add("theme-light");
+
+  applyLayout();   /* sets grid class, shows/hides cards, and kicks off initial loads */
+</script>
+</body>
+</html>

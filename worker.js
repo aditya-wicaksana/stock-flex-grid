@@ -145,7 +145,7 @@ const HTML = `<!DOCTYPE html>
     .portfolio-btn:hover { background: #21262d; color: #e6edf3; border-color: #8b949e; }
 
     .portfolio-total {
-      font-size: 0.82rem;
+      font-size: 1.1rem;
       font-weight: 700;
       color: #3fb950;
       white-space: nowrap;

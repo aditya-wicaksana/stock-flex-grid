@@ -1004,17 +1004,28 @@ export default {
       const results = await Promise.all(
         symbols.map(async (sym) => {
           try {
-            const r    = await fetch(
-              "https://query1.finance.yahoo.com/v8/finance/chart/" + sym + "?interval=1d&range=5d",
+            const r      = await fetch(
+              "https://query1.finance.yahoo.com/v8/finance/chart/" + sym +
+              "?interval=5m&range=1d&includePrePost=true",
               { headers: { "User-Agent": UA } }
             );
-            const d    = await r.json();
-            const meta = d && d.chart && d.chart.result && d.chart.result[0] && d.chart.result[0].meta;
+            const d      = await r.json();
+            const result = d && d.chart && d.chart.result && d.chart.result[0];
+            const meta   = result && result.meta;
             if (!meta) return null;
-            // Pick the most current available price across all sessions
-            let price = meta.regularMarketPrice;
-            if (meta.marketState === "PRE"  && meta.preMarketPrice  > 0) price = meta.preMarketPrice;
-            if (meta.marketState === "POST" && meta.postMarketPrice > 0) price = meta.postMarketPrice;
+
+            // Last non-null close across all 5-min candles covers pre/regular/post market
+            let price = null;
+            const closes = result.indicators &&
+                           result.indicators.quote &&
+                           result.indicators.quote[0] &&
+                           result.indicators.quote[0].close;
+            if (closes) {
+              for (let i = closes.length - 1; i >= 0; i--) {
+                if (closes[i] != null) { price = closes[i]; break; }
+              }
+            }
+            if (price == null) price = meta.regularMarketPrice;
             if (price == null) price = meta.chartPreviousClose;
 
             return {

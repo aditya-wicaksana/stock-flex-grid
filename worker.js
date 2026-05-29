@@ -141,6 +141,9 @@ const HTML = `<!DOCTYPE html>
       color: #8b949e;
       flex-shrink: 0;
       transition: background 0.15s, color 0.15s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       line-height: 1;
     }
     .ctrl-toggle:hover { background: #21262d; color: #e6edf3; }

@@ -132,7 +132,8 @@ const HTML = `<!DOCTYPE html>
     /* ── Chart-controls collapse ────────────────────────────── */
     .ctrl-toggle {
       padding: 3px 8px;
-      font-size: 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 700;
       border: 1px solid #30363d;
       border-radius: 5px;
       cursor: pointer;

@@ -264,7 +264,7 @@ const HTML = `<!DOCTYPE html>
       background: #161b22;
       border: 1px solid #30363d;
       border-radius: 12px;
-      width: min(580px, 95vw);
+      width: min(680px, 95vw);
       max-height: 85vh;
       display: flex;
       flex-direction: column;
@@ -298,14 +298,15 @@ const HTML = `<!DOCTYPE html>
     .p-table td { padding: 4px 6px; vertical-align: middle; }
     .p-table tbody tr:hover { background: #0d1117; }
 
-    .p-ticker-input, .p-qty-input {
+    .p-ticker-input, .p-qty-input, .p-avg-input {
       background: #21262d; border: 1px solid #30363d; border-radius: 4px;
       color: #e6edf3; font-size: 0.8rem; padding: 5px 8px; width: 100%;
       transition: border-color 0.15s;
     }
     .p-ticker-input { text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em; }
-    .p-qty-input    { text-align: right; }
-    .p-ticker-input:focus, .p-qty-input:focus { outline: none; border-color: #58a6ff; background: #161b22; }
+    .p-qty-input, .p-avg-input { text-align: right; }
+    .p-ticker-input:focus, .p-qty-input:focus, .p-avg-input:focus { outline: none; border-color: #58a6ff; background: #161b22; }
+    .p-avg-input:disabled { color: #484f58; cursor: default; }
 
     .p-price-cell, .p-value-cell {
       text-align: right; font-variant-numeric: tabular-nums;
@@ -398,12 +399,13 @@ const HTML = `<!DOCTYPE html>
     body.theme-light .modal-close:hover { background: #f3f4f6; color: #24292f; }
     body.theme-light .p-table th        { color: #57606a; border-bottom-color: #d0d7de; }
     body.theme-light .p-table tbody tr:hover { background: #f6f8fa; }
-    body.theme-light .p-ticker-input, body.theme-light .p-qty-input {
+    body.theme-light .p-ticker-input, body.theme-light .p-qty-input, body.theme-light .p-avg-input {
       background: #f6f8fa; border-color: #d0d7de; color: #24292f;
     }
-    body.theme-light .p-ticker-input:focus, body.theme-light .p-qty-input:focus {
+    body.theme-light .p-ticker-input:focus, body.theme-light .p-qty-input:focus, body.theme-light .p-avg-input:focus {
       border-color: #0969da; background: #fff;
     }
+    body.theme-light .p-avg-input:disabled { color: #8c959f; }
     body.theme-light .p-price-cell  { color: #57606a; }
     body.theme-light .p-value-cell  { color: #24292f; }
     body.theme-light .p-del:hover   { color: #cf222e; background: #cf222e22; }
@@ -468,6 +470,7 @@ const HTML = `<!DOCTYPE html>
           <tr>
             <th>Ticker / CASH</th>
             <th class="num">Quantity</th>
+            <th class="num">Avg Price</th>
             <th class="num">Price</th>
             <th class="num">Value</th>
             <th></th>
@@ -670,26 +673,24 @@ const HTML = `<!DOCTYPE html>
   });
 
   /* ── Portfolio ────────────────────────────────────────────── */
-  var portfolio          = saved.portfolio || [];   /* [{ticker:'AAPL', qty:10}, ...] */
-  var modalPortfolio     = [];
-  var portfolioPrices    = {};   /* {AAPL: currentPrice} */
-  var portfolioOpenPrices = {};  /* {AAPL: openPrice}    */
-  var portfolioTimer     = null;
+  var portfolio       = saved.portfolio || [];   /* [{ticker:'AAPL', qty:10, avgPrice:150}] */
+  var modalPortfolio  = [];
+  var portfolioPrices = {};   /* {AAPL: currentPrice} */
+  var portfolioTimer  = null;
 
   async function fetchPrices(symbols) {
     var nonCash = symbols.filter(function(s) { return s !== "CASH"; });
-    if (nonCash.length === 0) return { prices: {}, opens: {} };
+    if (nonCash.length === 0) return {};
     try {
       var resp = await fetch("/api/quote?symbols=" + nonCash.join(","), { cache: "no-store" });
       var data = await resp.json();
-      var prices = {}, opens = {};
+      var prices = {};
       ((data.quoteResponse && data.quoteResponse.result) || []).forEach(function(q) {
         prices[q.symbol] = q.regularMarketPrice;
-        if (q.regularMarketOpen > 0) opens[q.symbol] = q.regularMarketOpen;
       });
-      return { prices: prices, opens: opens };
+      return prices;
     } catch(e) {
-      return { prices: {}, opens: {} };
+      return {};
     }
   }
 
@@ -711,6 +712,17 @@ const HTML = `<!DOCTYPE html>
     return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  function calcCostBasis(items) {
+    var total = 0;
+    items.forEach(function(item) {
+      var t        = (item.ticker || "").toUpperCase();
+      var qty      = parseFloat(item.qty)      || 0;
+      var avgPrice = t === "CASH" ? 1 : (parseFloat(item.avgPrice) || 0);
+      total += qty * avgPrice;
+    });
+    return total;
+  }
+
   function renderToolbarTotal() {
     var el  = document.getElementById("portfolioTotal");
     var chg = document.getElementById("portfolioChange");
@@ -720,18 +732,18 @@ const HTML = `<!DOCTYPE html>
     }
 
     var currentTotal = calcTotal(portfolio, portfolioPrices);
-    var openTotal    = calcTotal(portfolio, portfolioOpenPrices);
+    var costBasis    = calcCostBasis(portfolio);
     el.textContent   = fmtMoney(currentTotal);
 
-    /* show change only when every non-cash holding has an open price */
-    var allHaveOpen = portfolio.every(function(item) {
+    /* show change only when every non-cash holding has a price loaded */
+    var allHavePrices = portfolio.every(function(item) {
       var t = (item.ticker || "").toUpperCase();
-      return t === "CASH" || portfolioOpenPrices[t] != null;
+      return t === "CASH" || portfolioPrices[t] != null;
     });
 
-    if (allHaveOpen && openTotal > 0) {
-      var change = currentTotal - openTotal;
-      var pct    = (change / openTotal) * 100;
+    if (allHavePrices && costBasis > 0) {
+      var change = currentTotal - costBasis;
+      var pct    = (change / costBasis) * 100;
       var sign   = change >= 0 ? "+" : "-";
       chg.textContent = sign + fmtMoney(Math.abs(change)) +
                         " (" + sign + Math.abs(pct).toFixed(2) + "%)";
@@ -760,11 +772,14 @@ const HTML = `<!DOCTYPE html>
       var value  = price != null ? qty * price : null;
 
       var tr = document.createElement("tr");
+      var avgPrice = isCash ? 1 : (parseFloat(item.avgPrice) || "");
       tr.innerHTML =
         '<td><input class="p-ticker-input" value="' + (item.ticker || "") + '"' +
           ' placeholder="e.g. AAPL" data-idx="' + i + '" /></td>' +
         '<td><input class="p-qty-input" type="number" value="' + (item.qty !== "" ? item.qty : "") + '"' +
           ' min="0" step="any" placeholder="0" data-idx="' + i + '" /></td>' +
+        '<td><input class="p-avg-input" type="number" value="' + (isCash ? "1" : (item.avgPrice != null ? item.avgPrice : "")) + '"' +
+          ' min="0" step="any" placeholder="0"' + (isCash ? ' disabled' : '') + ' data-idx="' + i + '" /></td>' +
         '<td class="p-price-cell">' +
           (isCash ? "&#8212;" : (price != null ? fmtMoney(price) : "&#8212;")) +
         '<\/td>' +
@@ -797,9 +812,8 @@ const HTML = `<!DOCTYPE html>
     var symbols = portfolio
       .map(function(p) { return (p.ticker || "").toUpperCase(); })
       .filter(function(s, i, a) { return s && a.indexOf(s) === i && s !== "CASH"; });
-    var result = await fetchPrices(symbols);
-    Object.assign(portfolioPrices,     result.prices);
-    Object.assign(portfolioOpenPrices, result.opens);
+    var prices = await fetchPrices(symbols);
+    Object.assign(portfolioPrices, prices);
     renderToolbarTotal();
     if (!document.getElementById("portfolioModal").hidden) refreshModalPrices();
   }
@@ -821,9 +835,8 @@ const HTML = `<!DOCTYPE html>
       .map(function(p) { return (p.ticker || "").toUpperCase(); })
       .filter(function(s, i, a) { return s && a.indexOf(s) === i && s !== "CASH"; });
     if (symbols.length > 0) {
-      fetchPrices(symbols).then(function(result) {
-        Object.assign(portfolioPrices,     result.prices);
-        Object.assign(portfolioOpenPrices, result.opens);
+      fetchPrices(symbols).then(function(prices) {
+        Object.assign(portfolioPrices, prices);
         refreshModalPrices();
       });
     }
@@ -837,11 +850,14 @@ const HTML = `<!DOCTYPE html>
     /* read current input values before saving */
     var tickerInputs = document.querySelectorAll("#portfolioRows .p-ticker-input");
     var qtyInputs    = document.querySelectorAll("#portfolioRows .p-qty-input");
+    var avgInputs    = document.querySelectorAll("#portfolioRows .p-avg-input");
     var result = [];
     tickerInputs.forEach(function(input, i) {
-      var ticker = input.value.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
-      var qty    = parseFloat(qtyInputs[i].value) || 0;
-      if (ticker) result.push({ ticker: ticker, qty: qty });
+      var ticker   = input.value.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
+      var qty      = parseFloat(qtyInputs[i].value)  || 0;
+      var isCash   = ticker === "CASH";
+      var avgPrice = isCash ? 1 : (parseFloat(avgInputs[i].value) || 0);
+      if (ticker) result.push({ ticker: ticker, qty: qty, avgPrice: avgPrice });
     });
     portfolio = result;
     saveSettings({ portfolio: portfolio });
@@ -858,6 +874,8 @@ const HTML = `<!DOCTYPE html>
     } else if (e.target.classList.contains("p-qty-input")) {
       modalPortfolio[idx].qty = e.target.value;
       renderModalTotal();
+    } else if (e.target.classList.contains("p-avg-input")) {
+      modalPortfolio[idx].avgPrice = e.target.value;
     }
   });
 
@@ -866,9 +884,8 @@ const HTML = `<!DOCTYPE html>
     if (!e.target.classList.contains("p-ticker-input")) return;
     var ticker = e.target.value.trim().toUpperCase();
     if (!ticker || ticker === "CASH") { refreshModalPrices(); return; }
-    fetchPrices([ticker]).then(function(result) {
-      Object.assign(portfolioPrices,     result.prices);
-      Object.assign(portfolioOpenPrices, result.opens);
+    fetchPrices([ticker]).then(function(prices) {
+      Object.assign(portfolioPrices, prices);
       refreshModalPrices();
     });
   }, true);
@@ -948,9 +965,6 @@ export default {
               regularMarketPrice: meta.regularMarketPrice != null
                                     ? meta.regularMarketPrice
                                     : meta.chartPreviousClose,
-              regularMarketOpen:  meta.regularMarketOpen > 0
-                                    ? meta.regularMarketOpen
-                                    : null,
             };
           } catch (_) {
             return null;

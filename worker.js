@@ -154,6 +154,14 @@ const HTML = `<!DOCTYPE html>
     }
     .portfolio-total:empty { display: none; }
 
+    .portfolio-updated {
+      font-size: 0.68rem;
+      color: #484f58;
+      white-space: nowrap;
+    }
+    .portfolio-updated:empty { display: none; }
+    body.theme-light .portfolio-updated { color: #8c959f; }
+
     /* ── Grid ───────────────────────────────────────────────── */
     main {
       flex: 1;
@@ -428,6 +436,7 @@ const HTML = `<!DOCTYPE html>
 
     <button class="portfolio-btn" id="portfolioBtn">Edit Portfolio</button>
     <span class="portfolio-total" id="portfolioTotal"></span>
+    <span class="portfolio-updated" id="portfolioUpdated"></span>
   </div>
 </header>
 
@@ -657,7 +666,7 @@ const HTML = `<!DOCTYPE html>
     var nonCash = symbols.filter(function(s) { return s !== "CASH"; });
     if (nonCash.length === 0) return {};
     try {
-      var resp = await fetch("/api/quote?symbols=" + nonCash.join(","));
+      var resp = await fetch("/api/quote?symbols=" + nonCash.join(","), { cache: "no-store" });
       var data = await resp.json();
       var result = {};
       ((data.quoteResponse && data.quoteResponse.result) || []).forEach(function(q) {
@@ -689,8 +698,11 @@ const HTML = `<!DOCTYPE html>
 
   function renderToolbarTotal() {
     var el = document.getElementById("portfolioTotal");
-    if (portfolio.length === 0) { el.textContent = ""; return; }
+    var ts = document.getElementById("portfolioUpdated");
+    if (portfolio.length === 0) { el.textContent = ""; ts.textContent = ""; return; }
     el.textContent = fmtMoney(calcTotal(portfolio, portfolioPrices));
+    var now = new Date();
+    ts.textContent = "updated " + now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   }
 
   function renderModalTotal() {
@@ -903,7 +915,7 @@ export default {
 
       return new Response(
         JSON.stringify({ quoteResponse: { result: results.filter(Boolean) } }),
-        { headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" } }
+        { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } }
       );
     }
 

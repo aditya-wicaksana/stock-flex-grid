@@ -1,0 +1,4 @@
+name = "stock-flex-grid"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+account_id = "30adf66ba8543c2c6c3249397e2e7d31"

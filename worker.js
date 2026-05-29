@@ -448,7 +448,7 @@ const HTML = `<!DOCTYPE html>
 
 <header>
   <div class="global-controls">
-    <button class="ctrl-toggle" id="ctrlToggle" title="Show / hide chart controls">&#9664;</button>
+    <button class="ctrl-toggle" id="ctrlToggle" title="Show / hide chart controls">&#8722;</button>
 
     <div id="chartControls">
       <span class="control-label">Interval:</span>
@@ -694,7 +694,7 @@ const HTML = `<!DOCTYPE html>
   /* ── Chart-controls collapse ──────────────────────────────── */
   function applyCtrlsState() {
     document.getElementById("chartControls").classList.toggle("hidden", ctrlsCollapsed);
-    document.getElementById("ctrlToggle").textContent = ctrlsCollapsed ? "►" : "◄";
+    document.getElementById("ctrlToggle").textContent = ctrlsCollapsed ? "+" : "−";
   }
   document.getElementById("ctrlToggle").addEventListener("click", function() {
     ctrlsCollapsed = !ctrlsCollapsed;

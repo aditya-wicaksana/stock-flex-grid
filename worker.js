@@ -685,7 +685,7 @@ const HTML = `<!DOCTYPE html>
       var prices = {}, opens = {};
       ((data.quoteResponse && data.quoteResponse.result) || []).forEach(function(q) {
         prices[q.symbol] = q.regularMarketPrice;
-        opens[q.symbol]  = q.regularMarketOpen != null ? q.regularMarketOpen : q.regularMarketPrice;
+        if (q.regularMarketOpen > 0) opens[q.symbol] = q.regularMarketOpen;
       });
       return { prices: prices, opens: opens };
     } catch(e) {
@@ -948,9 +948,9 @@ export default {
               regularMarketPrice: meta.regularMarketPrice != null
                                     ? meta.regularMarketPrice
                                     : meta.chartPreviousClose,
-              regularMarketOpen:  meta.regularMarketOpen  != null
+              regularMarketOpen:  meta.regularMarketOpen > 0
                                     ? meta.regularMarketOpen
-                                    : meta.regularMarketPrice,
+                                    : null,
             };
           } catch (_) {
             return null;

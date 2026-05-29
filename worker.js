@@ -866,33 +866,45 @@ export default {
   async fetch(request) {
     const url = new URL(request.url);
 
-    /* Price proxy — avoids browser CORS restrictions on Yahoo Finance */
+    /* Price proxy — uses the chart API (no crumb/auth required) */
     if (url.pathname === "/api/quote") {
-      const symbols = url.searchParams.get("symbols") || "";
-      if (!symbols) {
+      const raw     = url.searchParams.get("symbols") || "";
+      const symbols = raw.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+
+      if (symbols.length === 0) {
         return new Response(JSON.stringify({ quoteResponse: { result: [] } }), {
           headers: { "Content-Type": "application/json" },
         });
       }
-      try {
-        const yfResp = await fetch(
-          "https://query1.finance.yahoo.com/v8/finance/quote?symbols=" +
-            encodeURIComponent(symbols) +
-            "&fields=regularMarketPrice",
-          { headers: { "User-Agent": "Mozilla/5.0" } }
-        );
-        const data = await yfResp.json();
-        return new Response(JSON.stringify(data), {
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-cache",
-          },
-        });
-      } catch (err) {
-        return new Response(JSON.stringify({ quoteResponse: { result: [] } }), {
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+
+      const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+      const results = await Promise.all(
+        symbols.map(async (sym) => {
+          try {
+            const r    = await fetch(
+              "https://query1.finance.yahoo.com/v8/finance/chart/" + sym + "?interval=1d&range=5d",
+              { headers: { "User-Agent": UA } }
+            );
+            const d    = await r.json();
+            const meta = d && d.chart && d.chart.result && d.chart.result[0] && d.chart.result[0].meta;
+            if (!meta) return null;
+            return {
+              symbol:             meta.symbol || sym,
+              regularMarketPrice: meta.regularMarketPrice != null
+                                    ? meta.regularMarketPrice
+                                    : meta.chartPreviousClose,
+            };
+          } catch (_) {
+            return null;
+          }
+        })
+      );
+
+      return new Response(
+        JSON.stringify({ quoteResponse: { result: results.filter(Boolean) } }),
+        { headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" } }
+      );
     }
 
     return new Response(HTML, {

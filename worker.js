@@ -131,7 +131,7 @@ const HTML = `<!DOCTYPE html>
 
     /* ── Chart-controls collapse ────────────────────────────── */
     .ctrl-toggle {
-      padding: 3px 8px;
+      padding: 5px 8px 1px;
       font-size: 0.85rem;
       font-weight: 700;
       border: 1px solid #30363d;
@@ -142,7 +142,6 @@ const HTML = `<!DOCTYPE html>
       flex-shrink: 0;
       transition: background 0.15s, color 0.15s;
       display: inline-flex;
-      align-items: center;
       justify-content: center;
       line-height: 1;
     }

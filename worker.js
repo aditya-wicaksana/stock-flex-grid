@@ -154,8 +154,15 @@ const HTML = `<!DOCTYPE html>
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+      overflow: hidden;
+      max-width: 1200px;
+      opacity: 1;
+      transition: max-width 0.35s ease, opacity 0.25s ease;
     }
-    #chartControls.hidden { display: none; }
+    #chartControls.hidden {
+      max-width: 0;
+      opacity: 0;
+    }
 
     /* ── Portfolio toolbar elements ─────────────────────────── */
     .portfolio-btn {
